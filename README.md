@@ -1,6 +1,9 @@
-# Obsidian Sample Plugin
+# Obsidian Daily Journal Plugin
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+This is a daily journaling plugin for Obsidian (https://obsidian.md).
+
+---
+TODO: Update below
 
 This project uses Typescript to provide type checking and documentation.
 The repo depends on the latest plugin API (obsidian.d.ts) in Typescript Definition format, which contains TSDoc comments describing what it does.

@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "obsidian-plugin-daily-journal",
+	"version": "0.1.0",
+	"description": "A plugin for Obsidian that facilitates creating and viewing daily journal entries.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
