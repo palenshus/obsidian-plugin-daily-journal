@@ -1,5 +1,5 @@
 {
-	"name": "obsidian-plugin-daily-journal",
+	"name": "daily-journal",
 	"version": "0.1.0",
 	"description": "A plugin for Obsidian that facilitates creating and viewing daily journal entries.",
 	"main": "main.js",
