@@ -11,6 +11,7 @@ export class OnThisDayView extends ItemView {
         super(leaf);
         this.rootEl = this.containerEl.children[1];
         this.settings = settings;
+        this.icon = 'history'; 
 
         // re-render when settings change
         this.registerEvent(

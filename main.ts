@@ -29,12 +29,21 @@ export default class DailyJournalPlugin extends Plugin {
             this.activateView();
         });
 
-        // This creates a command that can be activated from the command palette or a hotkey
+        // Command to activate the sidebar from the command palette or a hotkey.
         this.addCommand({
             id: "open-on-this-day",
             name: "Open 'On this day' view",
             callback: () => {
                 this.activateView();
+            },
+        });
+
+        // Command to create a new journal page for current year.
+        this.addCommand({
+            id: "create-journal-page",
+            name: "Create new journal page for current year",
+            callback: () => {
+                this.createEmptyJournalPage();
             },
         });
 
@@ -70,6 +79,15 @@ export default class DailyJournalPlugin extends Plugin {
                 }
             }
         });
+    }
+
+    // Create a new journal page for the current year, with a blank entry for each day so far.
+    async createEmptyJournalPage() {
+        const fileName = `${moment().year()}.md`;
+        const file = await this.app.vault.create(fileName, "");
+        for (let current = moment([moment().year(), 0, 1]); current < moment(); current.add(1, 'days')) {
+            this.app.vault.append(file, `${current.format("#ddd #MMMMDD")} \n\n`);                        
+        }
     }
 
     // Activate the right sidebar view
