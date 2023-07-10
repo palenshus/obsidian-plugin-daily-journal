@@ -1,137 +1,257 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, ItemView, MarkdownView, Plugin, PluginSettingTab, Setting, Vault, WorkspaceLeaf, debounce, moment } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
+interface PluginSettings {
+    automaticNewEntry: boolean;
+    yearsToShow: number;
+    showYesterday: boolean;
+    showTomorrow: boolean;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+const DEFAULT_SETTINGS: PluginSettings = {
+    automaticNewEntry: true,
+    yearsToShow: 5,
+    showYesterday: true,
+    showTomorrow: true,
 }
+
+const settingsUpdatedTrigger = "on-this-day:settings-updated";
 
 export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+    settings: PluginSettings;
 
-	async onload() {
-		await this.loadSettings();
+    async onload() {
+        await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+        // This creates an icon in the left ribbon.
+        this.addRibbonIcon('dice', "Open 'On this day' view", () => {
+            this.activateView();
+        });
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+        this.addCommand({
+            id: "open-on-this-day",
+            name: "Open 'On this day' view",
+            callback: () => {
+                this.activateView();
+            },
+        });
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+        this.registerView(OnThisDayView.VIEW_TYPE, (leaf) => new OnThisDayView(leaf, this.settings));
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
+        // This adds a settings tab so the user can configure various aspects of the plugin
+        this.addSettingTab(new SettingTab(this.app, this));
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+        this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
+            console.log(this.settings.automaticNewEntry);
+            if (this.settings.automaticNewEntry && evt.key === 'Enter') {
+                const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+                if (!editor) {
+                    return;
+                }
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+                const line = editor.getCursor().line;
+                if (line > 1) {
+                    const prevLine2 = editor.getLine(line - 2);
+                    const prevLine = editor.getLine(line - 1);
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
+                    if (prevLine === "") {
+                        const prevDate = moment(prevLine2, "ddd MMMMDD");
+                        if (prevDate.isValid()) {
+                            const newDate = prevDate.add(1, 'days');
+                            const newDateString = `${newDate.format("#ddd #MMMMDD")} `;
+                            editor.replaceRange(newDateString, editor.getCursor());
+                            editor.setCursor(line, newDateString.length);
+                        }
+                    }
+                }
+            }
+        });
+    }
 
-	onunload() {
+    async activateView() {
+        this.app.workspace.detachLeavesOfType(OnThisDayView.VIEW_TYPE);
 
-	}
+        await this.app.workspace.getRightLeaf(false).setViewState({
+            type: OnThisDayView.VIEW_TYPE,
+            active: true,
+        });
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
+        this.app.workspace.revealLeaf(
+            this.app.workspace.getLeavesOfType(OnThisDayView.VIEW_TYPE)[0]
+        );
+    }
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+    onunload() {
+
+    }
+
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
+
+    async saveSettings() {
+        console.log(this.settings.automaticNewEntry);
+        await this.saveData(this.settings);
+        console.log(this.settings.automaticNewEntry);
+        this.app.workspace.trigger(settingsUpdatedTrigger);
+    }
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+class OnThisDayView extends ItemView {
+    public static VIEW_TYPE: string = 'on-this-day-view';
+    private rootEl: Element;
+    private dateShowing: moment.Moment;
+    settings: PluginSettings;
 
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
+    getViewType(): string {
+        return OnThisDayView.VIEW_TYPE;
+    }
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
+    getDisplayText(): string {
+        return 'On This Day';
+    }
+
+    constructor(leaf: WorkspaceLeaf, settings: PluginSettings) {
+        super(leaf);
+        this.rootEl = this.containerEl.children[1];
+        this.settings = settings;
+
+        this.registerEvent(
+            (this.app.workspace as any).on(
+                "on-this-day:settings-updated",
+                () => this.renderView()
+            )
+        );
+
+        // rerender at midnight
+        this.registerInterval(
+            window.setInterval(() => {
+                if (this.dateShowing.date() !== moment().date()) {
+                    this.renderView();
+                }
+            }, 60 * 60 * 1000 // 1 hour)
+            ));
+    }
+
+    async onOpen() {
+        await this.renderView();
+    }
+
+    private async renderView() {
+        this.dateShowing = moment();
+        const currentYear: string = moment().format("YYYY")
+        const { vault } = this.app;
+
+        this.rootEl.empty();
+
+        if (this.settings.showYesterday) {
+            this.rootEl.createEl('h1', { text: `Yesterday` });
+            await this.addDayNode(moment().add(-1, "days"), this.rootEl, vault, currentYear);
+        }
+
+        this.rootEl.createEl('h1', { text: `Today`, attr: { style: "color: greenyellow;" } });
+        await this.addDayNode(moment(), this.rootEl, vault, currentYear);
+
+        if (this.settings.showTomorrow) {
+            this.rootEl.createEl('h1', { text: `Tomorrow` });
+            await this.addDayNode(moment().add(1, "days"), this.rootEl, vault, currentYear);
+        }
+    }
+
+    async addDayNode(filterDate: moment.Moment, contentEl: Element, vault: Vault, currentYear: string) {
+        for (const file of Array.from(vault.getMarkdownFiles()).sort((a, b) => a.basename.localeCompare(b.basename))) {
+            if (file.basename.match(/^\d{4}$/)) {
+                const year: string = file.basename;
+                console.log("Found file: " + year);
+
+                if (year === currentYear) {
+                    break;
+                }
+
+                const content = await vault.cachedRead(file);
+                for (const match of content.matchAll(/^#(\w{3}) #(\w+)(\d{2})\s+(.*)/gm)) {
+                    const [_, day, month, date, text] = match;
+
+                    if (month === filterDate.format("MMMM") && date === filterDate.format("DD")) {
+                        contentEl.createEl('h3', { text: `${year} - ${day}, ${month} ${date}` });
+
+                        let showingSummary = true;
+                        const summary = contentEl.createEl('p', { text: `${text.substring(0, 100)}...` });
+                        summary.onClickEvent(() => {
+                            if (showingSummary) {
+                                summary.innerText = `${text}`
+                            } else {
+                                summary.innerText = `${text.substring(0, 100)}...`
+                            }
+                            showingSummary = !showingSummary;
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    async onClose() {
+    }
 }
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+class SettingTab extends PluginSettingTab {
+    public static VIEW_TYPE: string = 'on-this-day-view';
+    plugin: MyPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+    constructor(app: App, plugin: MyPlugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
 
-	display(): void {
-		const {containerEl} = this;
+    display(): void {
+        const { containerEl } = this;
+        const DEBOUNCE_DELAY = 500;
 
-		containerEl.empty();
+        containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+        containerEl.createEl('h2', { text: "Settings for 'Daily Journal' plugin." });
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+        new Setting(containerEl)
+            .setName('Add new entry on double-newline')
+            .setDesc("If you press Enter twice in a row, a new entry will automatically be created for the next day.")
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.automaticNewEntry)
+                .onChange(async (value) => {
+                    this.plugin.settings.automaticNewEntry = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Years to show')
+            .setDesc("Number of previous years to show in the 'On this day' view")
+            .addSlider(slider => slider
+                .setLimits(1, 10, 1)
+                .setDynamicTooltip()
+                .setValue(this.plugin.settings.yearsToShow)
+                .onChange(debounce(async (value) => {
+                    this.plugin.settings.yearsToShow = value;
+                    await this.plugin.saveSettings();
+                }, DEBOUNCE_DELAY)));
+
+        new Setting(containerEl)
+            .setName('Show yesterday')
+            .setDesc("Show entry for yesterday in previous years in the 'On this day' view")
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.showYesterday)
+                .onChange(async (value) => {
+                    this.plugin.settings.showYesterday = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Show tomorrow')
+            .setDesc("Show entry for tomorrow in previous years in the 'On this day' view")
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.showTomorrow)
+                .onChange(async (value) => {
+                    this.plugin.settings.showTomorrow = value;
+                    await this.plugin.saveSettings();
+                }));
+    }
 }
