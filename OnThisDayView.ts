@@ -1,4 +1,4 @@
-import { ItemView, Vault, WorkspaceLeaf, moment } from 'obsidian';
+import { ItemView, MarkdownRenderer, Vault, WorkspaceLeaf, moment } from 'obsidian';
 import { PluginSettings } from 'main';
 
 export class OnThisDayView extends ItemView {
@@ -7,19 +7,12 @@ export class OnThisDayView extends ItemView {
     private dateShowing: moment.Moment;
     settings: PluginSettings;
 
-    getViewType(): string {
-        return OnThisDayView.VIEW_TYPE;
-    }
-
-    getDisplayText(): string {
-        return 'On This Day';
-    }
-
     constructor(leaf: WorkspaceLeaf, settings: PluginSettings) {
         super(leaf);
         this.rootEl = this.containerEl.children[1];
         this.settings = settings;
 
+        // re-render when settings change
         this.registerEvent(
             (this.app.workspace as any).on(
                 "on-this-day:settings-updated",
@@ -27,7 +20,7 @@ export class OnThisDayView extends ItemView {
             )
         );
 
-        // rerender at midnight
+        // re-render at midnight
         this.registerInterval(
             window.setInterval(() => {
                 if (this.dateShowing.date() !== moment().date()) {
@@ -37,13 +30,21 @@ export class OnThisDayView extends ItemView {
             ));
     }
 
+    getViewType(): string {
+        return OnThisDayView.VIEW_TYPE;
+    }
+
+    getDisplayText(): string {
+        return 'On This Day';
+    }
+
     async onOpen() {
         await this.renderView();
     }
 
     private async renderView() {
         this.dateShowing = moment();
-        const currentYear: string = moment().format("YYYY");
+        const currentYear: number = moment().year();
         const { vault } = this.app;
 
         this.rootEl.empty();
@@ -62,25 +63,41 @@ export class OnThisDayView extends ItemView {
         }
     }
 
-    async addDayNode(filterDate: moment.Moment, contentEl: Element, vault: Vault, currentYear: string) {
+    // Adds an entry to the sidebar for a given day for previous years' entries.
+    async addDayNode(filterDate: moment.Moment, contentEl: Element, vault: Vault, currentYear: number) {
         for (const file of Array.from(vault.getMarkdownFiles()).sort((a, b) => a.basename.localeCompare(b.basename))) {
             if (file.basename.match(/^\d{4}$/)) {
-                const year: string = file.basename;
-                console.log("Found file: " + year);
 
-                if (year === currentYear) {
-                    break;
+                const year: number = +file.basename;
+
+                // Don't show this year, future years, or years further in the past than the yearsToShow setting specifies.
+                if (year >= currentYear ||
+                    (currentYear - this.settings.yearsToShow > year)) {
+                    continue;
                 }
 
+                const day = filterDate.format("ddd");
+                const month = filterDate.format("MMMM");
+                const date = filterDate.format("DD");
+                const journalEntryRegex = new RegExp(`^#\\w{3} #${month}${date}\\s+(.*)`);
+
                 const content = await vault.cachedRead(file);
-                for (const match of content.matchAll(/^#(\w{3}) #(\w+)(\d{2})\s+(.*)/gm)) {
-                    const [_, day, month, date, text] = match;
+                const lines = content.split("\n");
+                for (const [lineNumber, line] of lines.entries()) {
+                    const match = line.match(journalEntryRegex);
+                    if (match) {
+                        const text = match[1];
 
-                    if (month === filterDate.format("MMMM") && date === filterDate.format("DD")) {
-                        contentEl.createEl('h3', { text: `${year} - ${day}, ${month} ${date}` });
+                        // Create a paragraph with a link to the entry and a summary of the entry.
+                        const entry = contentEl.createEl('p');
 
+                        const link = entry.createEl('a', { attr: { href: "#" }, text: `${year} ${day} ${month} ${date}` });
+                        link.onClickEvent(() => { this.app.workspace.getLeaf(false).openFile(file, { eState: { line: lineNumber } }); });
+                        
+                        const summary = entry.createDiv({ text: ` ${text.substring(0, 100)}...`});
+
+                        // Show the full entry when the user clicks on the summary, and vice versa.
                         let showingSummary = true;
-                        const summary = contentEl.createEl('p', { text: `${text.substring(0, 100)}...` });
                         summary.onClickEvent(() => {
                             if (showingSummary) {
                                 summary.innerText = `${text}`;

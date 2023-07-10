@@ -29,6 +29,7 @@ export default class DailyJournalPlugin extends Plugin {
             this.activateView();
         });
 
+        // This creates a command that can be activated from the command palette or a hotkey
         this.addCommand({
             id: "open-on-this-day",
             name: "Open 'On this day' view",
@@ -37,13 +38,15 @@ export default class DailyJournalPlugin extends Plugin {
             },
         });
 
+        // Register the right sidebar view
         this.registerView(OnThisDayView.VIEW_TYPE, (leaf) => new OnThisDayView(leaf, this.settings));
 
         // This adds a settings tab so the user can configure various aspects of the plugin
         this.addSettingTab(new SettingTab(this.app, this));
 
+        // This monitors keyboard events so when the user presses enter, it will automatically create a new entry
+        // if the line above it is blank and the previous line is a journal entry.
         this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
-            console.log(this.settings.automaticNewEntry);
             if (this.settings.automaticNewEntry && evt.key === 'Enter') {
                 const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
                 if (!editor) {
@@ -69,6 +72,7 @@ export default class DailyJournalPlugin extends Plugin {
         });
     }
 
+    // Activate the right sidebar view
     async activateView() {
         this.app.workspace.detachLeavesOfType(OnThisDayView.VIEW_TYPE);
 
@@ -83,7 +87,7 @@ export default class DailyJournalPlugin extends Plugin {
     }
 
     onunload() {
-
+        this.app.workspace.detachLeavesOfType(OnThisDayView.VIEW_TYPE);
     }
 
     async loadSettings() {
@@ -91,9 +95,7 @@ export default class DailyJournalPlugin extends Plugin {
     }
 
     async saveSettings() {
-        console.log(this.settings.automaticNewEntry);
         await this.saveData(this.settings);
-        console.log(this.settings.automaticNewEntry);
         this.app.workspace.trigger(settingsUpdatedTrigger);
     }
 }
