@@ -4,14 +4,13 @@ import { PluginSettings } from 'main';
 export class OnThisDayView extends ItemView {
     public static VIEW_TYPE: string = 'on-this-day-view';
     private rootEl: Element;
-    private dateShowing: moment.Moment;
     settings: PluginSettings;
 
     constructor(leaf: WorkspaceLeaf, settings: PluginSettings) {
         super(leaf);
         this.rootEl = this.containerEl.children[1];
         this.settings = settings;
-        this.icon = 'history'; 
+        this.icon = 'history';
 
         // re-render when settings change
         this.registerEvent(
@@ -21,14 +20,21 @@ export class OnThisDayView extends ItemView {
             )
         );
 
-        // re-render at midnight
-        this.registerInterval(
-            window.setInterval(() => {
-                if (this.dateShowing.date() !== moment().date()) {
+        this.updateViewDaily();
+    }
+
+    // re-render at midnight, then again every 24 hours
+    updateViewDaily() {
+        const timeTilMidnight = moment().add(1, 'd').startOf('day').add(1, 's').diff(moment());
+
+        window.setTimeout(() => {
+            this.registerInterval(
+                window.setInterval(() => {
+                    console.log('rendering');
                     this.renderView();
-                }
-            }, 60 * 60 * 1000 // 1 hour)
-            ));
+                }, moment.duration(1, 'day').asMilliseconds())
+            );
+        }, timeTilMidnight);
     }
 
     getViewType(): string {
@@ -36,7 +42,7 @@ export class OnThisDayView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'On This Day';
+        return 'On this day';
     }
 
     async onOpen() {
@@ -44,7 +50,6 @@ export class OnThisDayView extends ItemView {
     }
 
     private async renderView() {
-        this.dateShowing = moment();
         const currentYear: number = moment().year();
         const { vault } = this.app;
 
@@ -94,8 +99,8 @@ export class OnThisDayView extends ItemView {
 
                         const link = entry.createEl('a', { attr: { href: "#" }, text: `${year} ${day} ${month} ${date}` });
                         link.onClickEvent(() => { this.app.workspace.getLeaf(false).openFile(file, { eState: { line: lineNumber } }); });
-                        
-                        const summary = entry.createDiv({ text: ` ${text.substring(0, 100)}...`});
+
+                        const summary = entry.createDiv({ text: ` ${text.substring(0, 100)}...` });
 
                         // Show the full entry when the user clicks on the summary, and vice versa.
                         let showingSummary = true;

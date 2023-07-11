@@ -15,8 +15,6 @@ export class SettingTab extends PluginSettingTab {
 
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: "Settings for 'Daily Journal' plugin." });
-
         new Setting(containerEl)
             .setName('Add new entry on double-newline')
             .setDesc("If you press Enter twice in a row, a new entry will automatically be created for the next day.")
