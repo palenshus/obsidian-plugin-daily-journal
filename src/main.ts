@@ -1,5 +1,5 @@
-import { OnThisDayView } from 'OnThisDayView';
-import { SettingTab } from 'SettingTab';
+import { OnThisDayView } from 'src/OnThisDayView';
+import { SettingTab } from 'src/SettingTab';
 import { MarkdownView, Plugin, moment } from 'obsidian';
 
 export interface PluginSettings {
@@ -105,7 +105,6 @@ export default class DailyJournalPlugin extends Plugin {
     }
 
     onunload() {
-        this.app.workspace.detachLeavesOfType(OnThisDayView.VIEW_TYPE);
     }
 
     async loadSettings() {
