@@ -1,5 +1,5 @@
-import { OnThisDayView } from 'src/OnThisDayView';
-import { SettingTab } from 'src/SettingTab';
+import { OnThisDayView } from 'OnThisDayView';
+import { SettingTab } from 'SettingTab';
 import { MarkdownView, Plugin, moment } from 'obsidian';
 
 export interface PluginSettings {
